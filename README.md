@@ -252,7 +252,7 @@ python numchain_v142.py run \
   --node-index 0 \
   --rpc 8000 \
   --gossip 9000 \
-  --peers 127.0.0.1:9001,127.0.0.1:9002
+  --peers 127.0.0.1:9001,127.0.0.1:9002'''
 
 Multi-Node Demo (Recommended)
 
