@@ -1,380 +1,251 @@
-# OCTA
-OCTA AGI Labs
+# NUMCHAIN v1.4.2 — Memory Arithmetic Chain (Closed Alpha)
+
+NUMCHAIN is an experimental, closed-alpha blockchain kernel built around **Memory Arithmetic (MA)** — a deterministic, fixed-point arithmetic model for evolving sharded tensor state under consensus.
+
+Unlike conventional blockchains that emphasize accounts, balances, or general-purpose virtual machines (EVM/WASM), NUMCHAIN treats **state itself as the primary object**. The chain commits only bounded, verifiable tensor mutations defined by a minimal and deterministic operation set.
+
+This repository contains **v1.4.2**, a single-file Python kernel with lightweight scaffolding for running a multi-node localhost/LAN cluster suitable for closed-alpha testing.
+
+> **Status:** Closed Alpha / Research Kernel  
+> **Audience:** Systems engineers, distributed systems researchers, high-TPS experimenters  
+> **Explicit non-goal:** Production blockchain, DeFi platform, or public permissionless network
 
 ---
 
-NUMCHAIN v1.4.2 — Memory Arithmetic Chain (Closed Alpha)
-
-NUMCHAIN is an experimental, closed-alpha blockchain-like system centered around Memory Arithmetic (MA) — a deterministic, fixed-point arithmetic model for evolving sharded tensor state under consensus.
-
-Unlike traditional blockchains that focus on accounts, tokens, or general virtual machines (EVM/WASM), NUMCHAIN treats state itself as the primary object: a bounded, verifiable, replayable memory substrate mutated only through a minimal set of deterministic operations.
-
-This repository contains v1.4.2, a single-file Python kernel plus lightweight scaffolding for running a multi-node localhost/LAN cluster.
-
-> Status: Closed-alpha prototype
-Audience: Systems engineers, distributed systems researchers, high-TPS experimenters
-Non-Goal: This is not a production blockchain, DeFi platform, or public testnet.
-
-
-
-
----
-
-What This Is
+## What This Is
 
 NUMCHAIN is:
 
-A deterministic, replayable state machine built on fixed-point tensor arithmetic
+- A **deterministic, replayable state machine** based on fixed-point tensor arithmetic  
+- A **minimal BFT chain kernel** with real cryptographic signatures and multi-node coordination  
+- A **research substrate** for exploring distributed, persistent memory evolution  
+- A **closed-alpha testnet harness** suitable for 4–10 trusted nodes on localhost or LAN  
 
-A minimal BFT chain kernel with real cryptographic signatures and multi-node coordination
+Core properties:
 
-A research substrate for exploring distributed, persistent memory evolution
-
-A closed-alpha testnet harness suitable for 4–10 trusted nodes on localhost or LAN
-
-
-Key properties:
-
-Memory Arithmetic (MA) as the only state transition primitive
-
-Bounded dynamics (decay + clipping) → no unbounded state explosion
-
-Sharded state (independent tensor partitions)
-
-Ed25519 signatures (PyNaCl preferred, cryptography fallback)
-
-Leader-based BFT-style consensus with quorum certificates
-
-Transaction gossip with ACK/retry reliability
-
-Append-only JSONL log + deterministic replay
-
-Prometheus-ready /metrics endpoint
-
-One-command local multi-node demo
-
-
+- **Memory Arithmetic (MA)** as the sole state transition primitive  
+- **Bounded dynamics** (decay + clipping) to prevent unbounded state growth  
+- **Sharded state model** (independent tensor partitions)  
+- **Ed25519 signatures** (PyNaCl preferred, `cryptography` fallback)  
+- **Leader-based BFT-style consensus** with quorum certificates  
+- **Transaction gossip with ACK/retry reliability**  
+- **Append-only JSONL log with deterministic replay**  
+- **Prometheus-compatible `/metrics` endpoint**  
+- **One-command local multi-node demo**
 
 ---
 
-What This Is Not
+## What This Is Not
 
-NUMCHAIN is explicitly not:
+NUMCHAIN is **explicitly not**:
 
-A general-purpose smart contract platform
-
-An EVM/WASM chain
-
-A public permissionless network
-
-A WAN-hardened P2P system (no libp2p, NAT traversal, encryption layers)
-
-Economically secure or attack-resistant
-
-Optimized for long-term persistence or large validator sets
-
+- A general-purpose smart contract platform  
+- An EVM / WASM chain  
+- A public permissionless network  
+- A WAN-hardened P2P system (no libp2p, NAT traversal, or transport security layers)  
+- Economically secure or adversarially hardened  
+- Optimized for long-term persistence or large validator sets  
 
 If you are looking for:
 
-DeFi, NFTs, accounts, balances → wrong project
-
-Production consensus or incentives → too early
-
-Trustless adversarial security → not yet
-
-
+- DeFi, NFTs, accounts, balances → **this is not that**  
+- Production-grade consensus or incentives → **out of scope**  
+- Trustless public deployment → **not ready**
 
 ---
 
-Mental Model: How to Think About NUMCHAIN
+## Conceptual Model
 
-NUMCHAIN is best understood as a replicated, consensus-governed memory substrate.
+NUMCHAIN should be understood as a **replicated, consensus-governed memory substrate**, not a financial ledger.
 
-State: A bounded tensor (Memory Arithmetic)
+- **State:** A bounded tensor (Memory Arithmetic)  
+- **Transactions:** Verified tensor mutations  
+- **Blocks:** Synchronization points for agreed mutations  
+- **Consensus:** Guarantees identical mutation order across nodes  
+- **PoC / PoP (experimental):** Structural alignment of storage/compute contribution with influence over memory evolution  
 
-Transactions: Verified mutations of that tensor
-
-Blocks: Synchronization points for agreed mutations
-
-Consensus: Ensures all nodes apply the same mutations in the same order
-
-PoC / PoP (experimental): Structural alignment of storage/compute contribution with influence over memory evolution
-
-
-In this framing, NUMCHAIN is closer to a distributed cognitive substrate than a financial ledger.
-
+In this framing, NUMCHAIN is closer to a **distributed cognitive substrate** than a transactional blockchain.
 
 ---
 
-Architecture Overview
+## Architecture Overview
 
-High-Level Components
+### Core Components
 
-State: Sharded MA tensors (int32, fixed-point)
+- **State:** Sharded MA tensors (`int32`, fixed-point)  
+- **Transactions:** Signed MA operations  
+- **Consensus:** Minimal leader-based BFT (HotStuff-style phases)  
+- **Networking:** TCP gossip (localhost / LAN)  
+- **RPC:** FastAPI (transaction submission, queries, metrics)  
+- **Persistence:** Append-only JSONL replay log  
 
-Transactions: Signed MA operations
+### Execution Flow
 
-Consensus: Minimal leader-based BFT (HotStuff-style phases)
-
-Networking: TCP gossip (localhost/LAN)
-
-RPC: FastAPI (submit tx, query blocks, metrics)
-
-Persistence: Append-only JSONL replay log
-
-
-Data Flow
-
-1. Node boots from shared genesis.json
-
-
-2. Transactions arrive via RPC or gossip
-
-
-3. Leader proposes block
-
-
-4. Validators vote → quorum certificate (QC)
-
-
-5. Block commits → MA state mutates
-
-
-6. Log entry written → height advances
-
-
-7. Restart → full deterministic replay
-
-
-
+1. Node boots from shared `genesis.json`  
+2. Transactions arrive via RPC or gossip  
+3. Leader proposes a block  
+4. Validators vote → quorum certificate (QC)  
+5. Block commits → MA state mutates  
+6. Log entry appended → height advances  
+7. Restart → deterministic replay from genesis + log  
 
 ---
 
-Memory Arithmetic (MA)
+## Memory Arithmetic (MA)
 
-Core Idea
+### State Representation
 
-The entire chain state is a fixed-point tensor:
+The full chain state is a fixed-point tensor:
 
 [ shard ][ layer ][ slot ][ dimension ]
 
-All state transitions are deterministic, bounded, and verifiable.
+All state transitions are **deterministic**, **bounded**, and **replay-safe**.
 
-Parameters (Default v1.4.2)
+### Default Parameters (v1.4.2)
 
-Parameter	Meaning
+| Parameter | Description |
+|---------|------------|
+| `L = 4` | Layers |
+| `S = 64` | Slots per layer |
+| `D = 128` | Dimensions |
+| `q = 1024` | Fixed-point scale |
+| `decay = 0.985` | Exponential decay |
+| `clip = 8.0` | Hard magnitude bound |
 
-L = 4	Layers
-S = 64	Slots per layer
-D = 128	Dimensions
-q = 1024	Fixed-point scale
-decay = 0.985	Exponential decay
-clip = 8.0	Hard magnitude bound
+Persisted state is stored as `int32`.  
+`float64` is used **only as a deterministic intermediate** before rounding.
 
+### Supported Operations
 
-All persisted state is int32.
-Float64 is used only as a deterministic intermediate before rounding.
+Each transaction applies exactly **one** MA operation:
 
-Supported Operations
+- **`add`** — Add bounded vector to a slot  
+- **`decay`** — Apply exponential decay  
+- **`mix`** — Linear interpolation between slots  
+- **`clip`** — Hard clamp to bounds  
 
-Each transaction applies exactly one MA operation:
+There are:
 
-add: Add bounded vector to a slot
+- No loops  
+- No branches  
+- No unbounded execution  
 
-decay: Multiply slot by decay factor
-
-mix: Linear interpolation between slots
-
-clip: Hard clamp to bounds
-
-
-No loops.
-No branches.
-No unbounded execution.
-
-This guarantees replay safety and cross-node determinism.
-
+This guarantees replay correctness and cross-node determinism.
 
 ---
 
-Transactions
+## Transactions
 
-A transaction specifies:
+Transactions specify:
 
-Target shard / layer / slot
+- Target shard, layer, and slot  
+- Operation type and parameters  
+- Ed25519 signature  
 
-Operation type
+Safety properties:
 
-Parameters (vector, alpha, decay, etc.)
-
-Ed25519 signature
-
-
-Transactions are:
-
-Size-bounded
-
-Deduplicated (LRU)
-
-Rate-limited per sender
-
-Gossip-propagated with TTL
-
-
+- Size-bounded payloads  
+- LRU-based deduplication  
+- Per-sender rate caps  
+- Gossip propagation with TTL  
 
 ---
 
-Consensus (v1.4.2)
+## Consensus (v1.4.2)
 
-NUMCHAIN uses a minimal, synchronous-assumption BFT-style protocol suitable for closed-alpha testing.
+NUMCHAIN implements a **minimal, synchronous-assumption BFT protocol** suitable for closed-alpha coordination.
 
-Properties
+### Properties
 
-Static validator set (from genesis)
+- Static validator set (from genesis)  
+- Weighted leader rotation (by bond)  
+- 2/3+ quorum certificates  
+- Deterministic leader selection  
+- RANDAO-style randomness (commit / reveal)  
+- Slashing reduces future voting power  
 
-Weighted leader rotation (by bond)
+### Important Notes
 
-2/3+ quorum certificates
+- Assumes **trusted peers**  
+- Gossip reliability uses ACK + bounded retry  
+- Byzantine behavior is only partially handled  
+- WAN latency and partitions are out of scope  
 
-Deterministic leader selection
-
-RANDAO-style randomness (commit/reveal)
-
-Slashing reduces future voting power
-
-
-Important Notes
-
-All networking assumes trusted peers
-
-Gossip reliability uses ACK + bounded retry
-
-Byzantine behavior is not fully tolerated
-
-WAN latency and partitions are out of scope
-
-
-This is not production consensus — it is a correctness-oriented kernel.
-
+This is a **correctness-oriented kernel**, not production consensus.
 
 ---
 
-Proof of Capacity (PoC) & Proof of Processing (PoP)
+## Proof of Capacity (PoC) & Proof of Processing (PoP)
 
-v1.4.2 includes structural implementations of PoC and PoP:
+v1.4.2 includes **structural implementations** of PoC and PoP:
 
-Commit → challenge → verify flow
+- Commit → challenge → verify flow  
+- Deterministic verification logic  
+- Integrated with consensus weighting  
 
-Deterministic verification
-
-Integrated with consensus weighting
-
-
-However:
-
-> PoC/PoP are architecturally correct but do not yet impose sustained resource pressure or economic market dynamics.
-
-
-
-They exist to show how storage/compute can align with MA evolution — not to provide real security yet.
-
+**Important:**  
+These mechanisms demonstrate architectural alignment but **do not yet impose sustained resource pressure or market dynamics**.
 
 ---
 
-Networking & Gossip
+## Networking & Gossip
 
-TCP, length-prefixed JSON frames
+- TCP, length-prefixed JSON frames  
+- Static peer lists  
+- Message types:
+  - `PROPOSAL`, `VOTE`, `QC`, `COMMIT`
+  - `RANDAO_COMMIT`, `RANDAO_REVEAL`
+  - `TXGOSSIP`
+- Critical messages use ACK + retry  
+- Transaction gossip is best-effort with TTL  
 
-Static peer list
-
-Message types:
-
-PROPOSAL, VOTE, QC, COMMIT
-
-RANDAO commit/reveal
-
-TXGOSSIP
-
-
-Critical messages use ACK + retry
-
-TX gossip is best-effort with TTL
-
-
-This is sufficient for:
-
-Localhost clusters
-
-LAN demos
-
-Closed-alpha coordination
-
-
-Not suitable for WAN.
-
+Designed for localhost and LAN clusters only.
 
 ---
 
-RPC API
+## RPC Interface
 
 Each node exposes a minimal RPC surface:
 
-POST /tx — submit transaction
-
-GET /health — node status
-
-GET /metrics — Prometheus metrics
-
-GET /block/{height} — block query
-
-GET /receipt/{txid} — tx receipt
-
-
+- `POST /tx` — Submit transaction  
+- `GET /health` — Node status  
+- `GET /metrics` — Prometheus metrics  
+- `GET /block/{height}` — Block query  
+- `GET /receipt/{txid}` — Transaction receipt  
 
 ---
 
-Persistence & Replay
+## Persistence & Replay
 
-Append-only JSONL log
+- Append-only JSONL log  
+- Records blocks, receipts, and state transitions  
+- On restart:
+  - Genesis loaded  
+  - Log replayed  
+  - MA state and bonds reconstructed deterministically  
 
-Records blocks, tx receipts, state transitions
-
-On restart:
-
-Genesis loaded
-
-Log replayed
-
-MA state and bonds reconstructed deterministically
-
-
-
-No database.
-No snapshots (yet).
-
+No database, no snapshots (yet).
 
 ---
 
-Running the Closed-Alpha Cluster
+## Running the Closed-Alpha Cluster
 
-Requirements
+### Requirements
 
-Python 3.12+
+- Python 3.12+  
+- Docker (recommended for multi-node demo)  
+- Linux or macOS preferred  
 
-Docker (for multi-node demo)
+### Install Dependencies
 
-Linux / macOS recommended
-
-
-Install Dependencies
-
+```bash
 python numchain_v142.py deps
 
 Generate Genesis
 
 python numchain_v142.py genesis --out genesis.json --nodes 5
 
-Run Single Node
+Run a Single Node
 
 python numchain_v142.py run \
   --genesis genesis.json \
@@ -383,14 +254,12 @@ python numchain_v142.py run \
   --gossip 9000 \
   --peers 127.0.0.1:9001,127.0.0.1:9002
 
-Multi-Node (Recommended)
-
-Use the provided scaffold:
+Multi-Node Demo (Recommended)
 
 make genesis
 make multi
 
-Then in another terminal:
+In separate terminals:
 
 make flood-multi
 make poll
@@ -406,37 +275,37 @@ Block height
 
 Mempool size
 
-TX accept/reject counters
+Transaction accept / reject counters
 
-Gossip send/recv/ack stats
+Gossip send / receive / ACK stats
 
-Apply latency p95/p99
+Apply latency p95 / p99
 
-Memory usage
+Memory and CPU usage
 
 Slashing events
 
 
-Grafana-ready.
+Fully Prometheus-compatible.
 
 
 ---
 
 Known Limitations
 
-No WAN P2P
+No WAN P2P or NAT traversal
 
 No dynamic validator set
 
 No real economic incentives
 
-No mempool fee market
+No fee market or priority mempool
 
 No state pruning
 
 JSONL replay slows with long chains
 
-Single-file codebase (dense, not modular)
+Single-file codebase (dense, non-modular)
 
 
 
@@ -446,16 +315,16 @@ Roadmap (Non-Binding)
 
 Near-term (closed alpha):
 
-TX gossip bandwidth tuning
+Transaction gossip bandwidth tuning
 
-Validator onboarding tx
+Validator onboarding transactions
 
 Basic state pruning
 
 
 Longer-term:
 
-WAN P2P
+WAN-capable P2P layer
 
 Real PoC read pressure
 
@@ -471,13 +340,25 @@ Final Note
 
 NUMCHAIN v1.4.2 is not a product — it is a kernel.
 
-Its purpose is to answer a hard systems question:
+Its purpose is to explore a fundamental systems question:
 
-> Can we build a deterministic, bounded, evolvable memory substrate that multiple independent machines can agree on and extend over time?
+> Can a deterministic, bounded, evolvable memory substrate be replicated and extended by multiple independent machines under consensus?
 
 
 
-This repository is one concrete attempt at that answer.
+This repository represents one concrete attempt to answer that question.
 
 
 ---
+
+If needed, this README can be further refined into:
+
+A short (1-page) overview
+
+A validator operator guide
+
+An architecture diagram
+
+A formal whitepaper section
+
+A closed-alpha rollout plan
