@@ -252,7 +252,7 @@ python numchain_v142.py run \
   --node-index 0 \
   --rpc 8000 \
   --gossip 9000 \
-  --peers 127.0.0.1:9001,127.0.0.1:9002'''
+  --peers 127.0.0.1:9001,127.0.0.1:9002
 
 Multi-Node Demo (Recommended)
 
@@ -291,7 +291,7 @@ Fully Prometheus-compatible.
 
 ---
 
-Known Limitations
+### Known Limitations
 
 No WAN P2P or NAT traversal
 
@@ -311,7 +311,7 @@ Single-file codebase (dense, non-modular)
 
 ---
 
-Roadmap (Non-Binding)
+### Roadmap (Non-Binding)
 
 Near-term (closed alpha):
 
@@ -322,7 +322,7 @@ Validator onboarding transactions
 Basic state pruning
 
 
-Longer-term:
+## Longer-term:
 
 WAN-capable P2P layer
 
@@ -336,7 +336,7 @@ Public testnet
 
 ---
 
-Final Note
+### Final Note
 
 NUMCHAIN v1.4.2 is not a product — it is a kernel.
 
