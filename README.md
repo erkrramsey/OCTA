@@ -351,14 +351,3 @@ This repository represents one concrete attempt to answer that question.
 
 ---
 
-If needed, this README can be further refined into:
-
-A short (1-page) overview
-
-A validator operator guide
-
-An architecture diagram
-
-A formal whitepaper section
-
-A closed-alpha rollout plan
