@@ -1,109 +1,425 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+
 """
-NeutrinoColliderMath.py — single-file utility for ε-extraction under quadratic (Majorana/Hyperknot) vs linear scaling.
+NeutrinoColliderMath — single-file utility for ε-extraction under quadratic (Majorana/Hyperknot) vs linear scaling.
 
 ===============================================================================
-CORE IDEA (DROP-IN FOR NOTES / WHITE PAPERS)
+CORE MAPPING (WHAT THIS SCRIPT DOES)
 ===============================================================================
 
-For collider-accessible ΔL=2 processes with a quadratic dependence on an effective coupling ε:
+If a ΔL=2 collider signal yield depends quadratically on an effective coupling ε:
 
-    S(ε) = ε² S0   (Quadratic: Majorana / Hyperknot-like)
+    Quadratic (Majorana/Hyperknot-like):    S(ε) = ε² S0
 
-the fitted signal strength μ (relative to the ε=1 template) satisfies:
+and your signal template (or reference yield) is normalized to ε=1 (i.e., the
+unsuppressed rate for that topology/benchmark), then the usual signal strength μ
+relative to that template is:
 
-    μ = S/S0 = ε²   =>   ε = √μ
+    μ = S / S0 = ε²   =>   ε = √μ
 
-Therefore the 95% CL bound on ε is:
+Therefore a 95% CL bound can be expressed as:
 
-    ε95 = √(S95 / S0)
+    ε95 = √(S95 / S0)   (equivalently ε95 = √μ95)
 
-where:
-  • S95 is the standard background-only upper limit on signal events from the same analysis
-  • S0 is the expected signal yield at ε=1 (for the same selection and luminosity)
+For a linear benchmark scaling axis:
 
-For a linear benchmark (often used as a comparative scaling axis):
+    Linear benchmark:                     S(ε) = ε S0
 
-    S(ε) = ε S0
-
-the 95% CL bound is:
+the corresponding 95% CL bound is:
 
     ε95 = S95 / S0
 
 ===============================================================================
-WHY THIS EXISTS
+S95 PROJECTION METHODS (FOR QUICK STUDIES)
 ===============================================================================
 
-Collider teams routinely produce limits on μ or σ×BR. This script provides a
-production-grade, low-friction mapping into ε for quadratic vs linear scaling,
-with:
-  • Gaussian S95 approximation for moderate/large B
-  • Exact Poisson inversion for low B (background known) projections
-  • Auto-switching between methods
-  • Benchmark dictionaries, tables, and plots
-  • CLI so it can be used without touching code
-
-===============================================================================
-S95 METHODS (PROJECTIONS)
-===============================================================================
-
-1) Gaussian (background-dominated, large-B rule of thumb):
+1) Gaussian (background-dominated):
     S95 ≈ 1.64 √(B + δB²)
 
-2) Poisson (exact inversion, background known):
-    Solve for s such that  P(N ≤ n_obs | λ=b+s) = 1-CL
-    For projections we use n_obs = floor(b) as a typical/Asimov-ish observation.
+2) Poisson exact inversion (background known, δB=0), with an assumed observation
+   convention for projections:
+      - n_obs_mode="floor":  n_obs = floor(B)
+      - n_obs_mode="round":  n_obs = round(B)
+      - n_obs_mode="asimov": n_obs = int(B + 0.5)  (simple median-ish proxy)
 
-Auto method uses Poisson when:
-  • B < lowB_threshold AND δB == 0
-else uses Gaussian.
+   Solve for s such that:
+      P(N ≤ n_obs | λ=B+s) = 0.05   (one-sided 95% CL)
 
-===============================================================================
-USAGE QUICKSTART
-===============================================================================
+3) Auto:
+   Use Poisson when (B < threshold and δB==0), else Gaussian.
 
-(1) As a library:
-    from NeutrinoColliderMath import plot_sensitivity, benchmark_table
-
-(2) CLI:
-    python NeutrinoColliderMath.py plot --lumi 1 3 10 30 100 --bkg 8 --S0-per-ab 80 --method auto
-    python NeutrinoColliderMath.py table --preset default --lumi 1 3 10 30 100 --method auto
-
-===============================================================================
-NOTES (SANITY / LIMITATIONS)
-===============================================================================
-
-• Poisson method implemented here assumes background-known (δB=0). This is
-  appropriate for quick sensitivity projections. For publication-grade limits,
-  use your collaboration’s likelihood (CLs/profile) to obtain S95 or μ95 and then
-  apply ε95 = √μ95 or ε95 = √(S95/S0) directly.
-
-• The mapping μ = ε² is the “single-parameter universal suppression” hypothesis
-  for ΔL=2 amplitudes. If you infer inconsistent ε across ΔL=2 channels, that
-  falsifies universality.
+WARNING:
+  For publication-grade limits, import S95 or μ95 from your collaboration’s CLs /
+  profile-likelihood machinery. This script is designed for defensible, low-friction
+  projections and cross-checks.
 
 ===============================================================================
 COPY-PASTE BLURB (WHITEPAPER / NOTE)
 ===============================================================================
 
-"For models in which collider-accessible ΔL=2 rates depend quadratically on an
-effective coupling ε, the signal yield satisfies S(ε)=ε²S0, where S0 is the
-expected yield at ε=1. Therefore the 95% CL bound on ε is ε95=√(S95/S0), where
-S95 is the standard background-only upper limit on signal events from the same
-analysis. By contrast, for linear-scaling benchmarks S(ε)=εS0, one obtains
-ε95=S95/S0. Plotting both scalings versus luminosity provides a model-independent
-visualization of the small-ε regime in which quadratic suppression materially
-alters reach."
+"When the signal template is normalized to the ε=1 (unsuppressed) rate for a quadratic
+ΔL=2 model, the fitted signal strength satisfies μ = ε², hence ε95 = √μ95 = √(S95/S0),
+where S95 is the background-only 95% CL upper limit on signal events and S0 is the
+expected ε=1 yield. For a linear benchmark scaling S(ε)=εS0, one obtains ε95=S95/S0.
+Plotting both versus luminosity provides a model-independent visualization of the
+small-ε regime in which quadratic suppression materially alters reach."
 
 ===============================================================================
 """
 
 from __future__ import annotations
 
-import argparse
-import json
 import math
+from typing import Dict, List, Sequence, Tuple, Any, Optional
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+# =============================================================================
+# Poisson utilities (low-B exact inversion)
+# =============================================================================
+
+def _poisson_cdf(k: int, lam: float) -> float:
+    """
+    Poisson CDF P(N <= k | lambda=lam) computed by summing terms.
+
+    Notes:
+      • For our intended regime (lam ~ O(1–50), k ~ O(1–50)), this is stable.
+      • Guard included for very large lam to avoid exp(-lam) underflow pathologies.
+    """
+    if k < 0:
+        return 0.0
+    if lam < 0:
+        raise ValueError("lam must be >= 0")
+
+    # Underflow guard (exp(-lam) underflows near lam ~ 700 in double precision)
+    # If lam is enormous, CDF is essentially a step around k ~ lam.
+    if lam > 700:
+        return 0.0 if k < lam else 1.0
+
+    term = math.exp(-lam)  # i=0
+    s = term
+    for i in range(1, k + 1):
+        term *= lam / i
+        s += term
+    return min(max(s, 0.0), 1.0)
+
+
+def _select_n_obs(B: float, n_obs_mode: str) -> int:
+    m = n_obs_mode.lower().strip()
+    if m == "floor":
+        return int(math.floor(B))
+    if m == "round":
+        return int(round(B))
+    if m == "asimov":
+        # Simple median-ish proxy without introducing non-integer "Asimov counts"
+        return int(B + 0.5)
+    raise ValueError("n_obs_mode must be one of: 'floor', 'round', 'asimov'")
+
+
+def s95_poisson_known_bkg(B: float, cl: float = 0.95, n_obs_mode: str = "floor") -> float:
+    """
+    Exact one-sided 95% CL upper limit on s with known background B (δB=0),
+    using an assumed observation n_obs determined by n_obs_mode.
+
+    Solve:
+      P(N <= n_obs | λ = B + s) = 1 - cl
+    """
+    if B < 0:
+        raise ValueError("B must be >= 0")
+    if not (0.0 < cl < 1.0):
+        raise ValueError("cl must be in (0,1)")
+
+    n_obs = _select_n_obs(B, n_obs_mode)
+    target = 1.0 - cl
+
+    def f(s: float) -> float:
+        return _poisson_cdf(n_obs, B + s) - target  # monotone decreasing in s
+
+    lo = 0.0
+    hi = max(5.0, 5.0 * math.sqrt(B + 1.0) + 5.0)
+
+    # Bracket root
+    while f(hi) > 0.0:
+        hi *= 2.0
+        if hi > 1e6:
+            return hi
+
+    # Bisection
+    for _ in range(80):
+        mid = 0.5 * (lo + hi)
+        if f(mid) > 0.0:
+            lo = mid
+        else:
+            hi = mid
+
+    return max(0.0, 0.5 * (lo + hi))
+
+
+# =============================================================================
+# Gaussian S95 (moderate/large B)
+# =============================================================================
+
+def s95_gauss(B: float, dB: float = 0.0) -> float:
+    """
+    Fast rule-of-thumb (one-sided 95%):
+      S95 ≈ 1.64 * sqrt(B + dB^2)
+    """
+    if B < 0 or dB < 0:
+        raise ValueError("B and dB must be >= 0")
+    return 1.64 * math.sqrt(B + dB * dB)
+
+
+def s95(B: float,
+        dB: float = 0.0,
+        method: str = "auto",
+        threshold: float = 10.0,
+        n_obs_mode: str = "floor") -> Tuple[float, str]:
+    """
+    Unified S95 selection.
+
+    method:
+      - "gauss"   -> Gaussian approximation
+      - "poisson" -> exact Poisson inversion (requires dB=0)
+      - "auto"    -> Poisson if (B < threshold and dB==0), else Gaussian
+
+    n_obs_mode applies only to Poisson path.
+    """
+    method = method.lower().strip()
+    if method == "gauss":
+        return s95_gauss(B, dB), "gauss"
+
+    if method == "poisson":
+        if dB != 0.0:
+            raise ValueError("Poisson method assumes known background (dB=0). Use gauss/auto otherwise.")
+        return s95_poisson_known_bkg(B, cl=0.95, n_obs_mode=n_obs_mode), f"poisson({n_obs_mode})"
+
+    if method == "auto":
+        if (B < threshold) and (dB == 0.0):
+            return s95_poisson_known_bkg(B, cl=0.95, n_obs_mode=n_obs_mode), f"poisson({n_obs_mode})"
+        return s95_gauss(B, dB), "gauss"
+
+    raise ValueError("method must be one of: 'auto', 'gauss', 'poisson'")
+
+
+# =============================================================================
+# ε extraction
+# =============================================================================
+
+def eps95_quadratic(S95: float, S0: np.ndarray, floor: float = 1e-12) -> np.ndarray:
+    """
+    Vectorized ε95 for quadratic scaling:
+      ε95 = sqrt(S95/S0)
+    """
+    if np.any(S0 <= 0):
+        raise ValueError("All S0 values must be > 0")
+    ratio = np.maximum(S95 / S0, 0.0)
+    out = np.sqrt(ratio)
+    return np.maximum(out, floor)
+
+
+def eps95_linear(S95: float, S0: np.ndarray, floor: float = 1e-12) -> np.ndarray:
+    """
+    Vectorized ε95 for linear scaling:
+      ε95 = S95/S0
+    """
+    if np.any(S0 <= 0):
+        raise ValueError("All S0 values must be > 0")
+    out = np.maximum(S95 / S0, 0.0)
+    return np.maximum(out, floor)
+
+
+# =============================================================================
+# Plot + table helpers
+# =============================================================================
+
+def plot_sensitivity(
+    lumi_ab: Sequence[float],
+    B: float,
+    S0_per_ab: float,
+    *,
+    dB: float = 0.0,
+    method: str = "auto",
+    threshold: float = 10.0,
+    n_obs_mode: str = "floor",
+    outfile: str = "epsilon_sensitivity.png",
+    title: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Plot ε95 vs luminosity for quadratic vs linear scaling.
+
+    Inputs:
+      lumi_ab: list of luminosities in ab^-1
+      B: expected background events in SR
+      S0_per_ab: expected ε=1 signal yield per ab^-1 (after cuts)
+      dB: background uncertainty (Gaussian only)
+      method: auto|gauss|poisson
+      threshold: auto Poisson crossover
+      n_obs_mode: floor|round|asimov (Poisson path)
+    """
+    L = np.array(list(lumi_ab), dtype=float)
+    if L.size == 0 or np.any(L <= 0):
+        raise ValueError("lumi_ab must be non-empty and all values > 0")
+    if B < 0 or S0_per_ab <= 0:
+        raise ValueError("B must be >= 0 and S0_per_ab must be > 0")
+
+    S95, used = s95(B, dB=dB, method=method, threshold=threshold, n_obs_mode=n_obs_mode)
+
+    S0 = S0_per_ab * L  # ε=1 yields
+    eq = eps95_quadratic(S95, S0)
+    el = eps95_linear(S95, S0)
+
+    plt.figure(figsize=(7.2, 5.0))
+    plt.loglog(L, eq, "o-", label="Quadratic: S=ε² S0")
+    plt.loglog(L, el, "s--", label="Linear: S=ε S0")
+    plt.xlabel(r"Integrated luminosity [ab$^{-1}$]")
+    plt.ylabel(r"95% CL bound on $\varepsilon$")
+    if title is None:
+        title = f"ε scaling ({used}; B={B:g}, S0/ab={S0_per_ab:g})"
+    plt.title(title)
+    plt.grid(True, which="both", ls=":")
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(outfile, dpi=200)
+    plt.close()
+
+    return {
+        "outfile": outfile,
+        "S95": float(S95),
+        "method_used": used,
+        "lumi_ab": L.tolist(),
+        "eps95_quadratic": eq.tolist(),
+        "eps95_linear": el.tolist(),
+    }
+
+
+def benchmark_table(
+    benchmarks: Dict[str, Dict[str, float]],
+    lumi_ab: Sequence[float],
+    *,
+    method: str = "auto",
+    threshold: float = 10.0,
+    n_obs_mode: str = "floor",
+) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    for name, cfg in benchmarks.items():
+        B = float(cfg.get("bkg", 0.0))
+        S0_per_ab = float(cfg.get("S0_per_ab", 0.0))
+        dB = float(cfg.get("dB", 0.0))
+        if S0_per_ab <= 0:
+            raise ValueError(f"Benchmark '{name}' needs S0_per_ab > 0")
+
+        S95, used = s95(B, dB=dB, method=method, threshold=threshold, n_obs_mode=n_obs_mode)
+
+        for L in lumi_ab:
+            Lf = float(L)
+            if Lf <= 0:
+                raise ValueError("All luminosities must be > 0")
+            S0 = np.array([S0_per_ab * Lf], dtype=float)
+            eps_q = float(eps95_quadratic(S95, S0)[0])
+            eps_l = float(eps95_linear(S95, S0)[0])
+            rows.append({
+                "benchmark": name,
+                "L_ab": Lf,
+                "B": B,
+                "dB": dB,
+                "S0_per_ab": S0_per_ab,
+                "S95": float(S95),
+                "method_used": used,
+                "eps95_quadratic": eps_q,
+                "eps95_linear": eps_l,
+            })
+    return rows
+
+
+def print_table(rows: List[Dict[str, Any]]) -> None:
+    if not rows:
+        print("(no rows)")
+        return
+    w = max(len(r["benchmark"]) for r in rows)
+    print(f"{'benchmark'.ljust(w)}  {'L':>6}  {'B':>5}  {'S0/ab':>7}  {'S95':>7}  {'eps_quad':>9}  {'eps_lin':>9}  {'method':>14}")
+    print("-" * (w + 64))
+    for r in rows:
+        print(
+            f"{r['benchmark'].ljust(w)}  {r['L_ab']:6.1f}  {r['B']:5.1f}  {r['S0_per_ab']:7.1f}  "
+            f"{r['S95']:7.2f}  {r['eps95_quadratic']:9.4g}  {r['eps95_linear']:9.4g}  {r['method_used']:>14}"
+        )
+
+
+def latex_table(rows: List[Dict[str, Any]]) -> str:
+    if not rows:
+        return "% (no rows)\n"
+    # Group by benchmark
+    by: Dict[str, List[Dict[str, Any]]] = {}
+    for r in rows:
+        by.setdefault(r["benchmark"], []).append(r)
+    for k in by:
+        by[k] = sorted(by[k], key=lambda x: float(x["L_ab"]))
+
+    lines = []
+    lines.append(r"\begin{table}[h!]")
+    lines.append(r"\centering")
+    lines.append(r"\begin{tabular}{lrrrrrr}")
+    lines.append(r"\hline")
+    lines.append(r"Benchmark & $L$ [ab$^{-1}$] & $B$ & $S_{95}$ & $S_0$/ab & $\varepsilon_{95}^{(\mathrm{quad})}$ & $\varepsilon_{95}^{(\mathrm{lin})}$ \\")
+    lines.append(r"\hline")
+    for bench, rr in by.items():
+        for r in rr:
+            lines.append(
+                f"{bench} & {r['L_ab']:.1f} & {r['B']:.1f} & {r['S95']:.2f} & {r['S0_per_ab']:.1f} & {r['eps95_quadratic']:.4g} & {r['eps95_linear']:.4g} \\\\"
+            )
+        lines.append(r"\hline")
+    lines.append(r"\end{tabular}")
+    lines.append(r"\caption{Projected 95\% CL bounds on $\varepsilon$ under quadratic vs linear scaling.}")
+    lines.append(r"\end{table}")
+    return "\n".join(lines) + "\n"
+
+
+# =============================================================================
+# Default benchmarks (edit freely)
+# =============================================================================
+
+DEFAULT_BENCHMARKS: Dict[str, Dict[str, float]] = {
+    "10 TeV optimistic": {"bkg": 5.0, "S0_per_ab": 50.0, "dB": 0.0},
+    "10 TeV realistic":  {"bkg": 20.0, "S0_per_ab": 100.0, "dB": 0.0},
+    "3 TeV early":       {"bkg": 10.0, "S0_per_ab": 20.0, "dB": 0.0},
+    "10 TeV slide demo": {"bkg": 8.0, "S0_per_ab": 80.0, "dB": 0.0},
+}
+
+
+# =============================================================================
+# Demo run (safe to delete)
+# =============================================================================
+
+if __name__ == "__main__":
+    # 1) Slide-worthy plot
+    out = plot_sensitivity(
+        lumi_ab=[1, 3, 10, 30, 100],
+        B=8.0,
+        S0_per_ab=80.0,
+        method="auto",
+        threshold=10.0,
+        n_obs_mode="floor",  # change to 'round' or 'asimov' if desired
+        outfile="10TeV_B8_S0_80.png",
+        title="10 TeV demo: B=8, S0/ab=80 (auto S95)",
+    )
+    print("Wrote:", out["outfile"])
+    print("S95:", f"{out['S95']:.4f}", "method:", out["method_used"])
+
+    # 2) Table
+    rows = benchmark_table(
+        DEFAULT_BENCHMARKS,
+        lumi_ab=[1, 3, 10, 30, 100],
+        method="auto",
+        threshold=10.0,
+        n_obs_mode="floor",
+    )
+    print_table(rows)
+
+    # 3) LaTeX snippet (optional)
+    # print(latex_table(rows))import math
 import sys
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Sequence, Tuple, Any
