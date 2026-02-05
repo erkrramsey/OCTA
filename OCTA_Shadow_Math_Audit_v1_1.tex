@@ -1,0 +1,675 @@
+
+% ============================================================
+% OCTA RESEARCH — SHADOW MATH / CALCULUS
+% Audit-grade projection–lift geometry + dimension certificates
+% Self-contained .tex (no external files required)
+% Compatible with pdfLaTeX (TeX Live 2022)
+% ============================================================
+
+\documentclass[11pt]{article}
+
+% ---------- Encoding / fonts (pdfLaTeX-safe) ----------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+
+% ---------- Layout ----------
+\usepackage[margin=1in]{geometry}
+\usepackage{microtype}
+
+% ---------- Math ----------
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{mathtools}
+
+% ---------- Tables / figures ----------
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+
+% ---------- Links / color ----------
+\usepackage{hyperref}
+\usepackage{xcolor}
+
+% ---------- Lists ----------
+\usepackage{enumitem}
+
+% ---------- Verbatim (audit artifacts) ----------
+\usepackage{fvextra}
+\DefineVerbatimEnvironment{JSON}{Verbatim}{
+  fontsize=\small,
+  frame=single,
+  breaklines=true,
+  breakanywhere=true
+}
+
+% ============================================================
+% OCTA Research styling
+% ============================================================
+\definecolor{octaGray}{RGB}{50,50,50}
+\definecolor{octaBlue}{RGB}{70,120,255}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=octaBlue,
+  urlcolor=octaBlue,
+  citecolor=octaBlue
+}
+
+\setlength{\parskip}{0.6em}
+\setlength{\parindent}{0pt}
+
+\newcommand{\OCTA}{\textsc{OCTA}}
+\newcommand{\OCTAResearch}{\textsc{OCTA Research}}
+\newcommand{\Tagline}{\textit{The Environment becomes your weapon.}}
+
+% ---------- Theorem environments ----------
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{axiom}{Axiom}[section]
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}{Proposition}[section]
+\newtheorem{lemma}{Lemma}[section]
+\newtheorem{corollary}{Corollary}[section]
+
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}[section]
+
+% ============================================================
+% Empirical constants (from Proof Lab v1.3 JSON, embedded later)
+% ============================================================
+\newcommand{\Seed}{\ensuremath{7}}
+\newcommand{\NPoints}{\ensuremath{120}}
+\newcommand{\NoiseSigmaPx}{\ensuremath{0.7}}
+\newcommand{\Views}{\ensuremath{3}}
+\newcommand{\FocalPx}{\ensuremath{800}}
+\newcommand{\Baseline}{\ensuremath{0.7}}
+\newcommand{\EnergyEps}{\ensuremath{0.002}}
+\newcommand{\RhoTau}{\ensuremath{0.01}}
+\newcommand{\EtaTau}{\ensuremath{0.005}}
+
+\newcommand{\SameShadowPixelDist}{\ensuremath{0.0}}
+
+\newcommand{\ReprojThreeDMean}{\ensuremath{0.633}}
+\newcommand{\ReprojThreeDMedian}{\ensuremath{0.595}}
+\newcommand{\ReprojThreeDMax}{\ensuremath{1.746}}
+
+\newcommand{\ReprojTwoDMean}{\ensuremath{0.624}}
+\newcommand{\ReprojTwoDMedian}{\ensuremath{0.572}}
+\newcommand{\ReprojTwoDMax}{\ensuremath{1.759}}
+
+\newcommand{\RhoThreeD}{\ensuremath{0.458569}}
+\newcommand{\EtaThreeD}{\ensuremath{0.0857872}}
+\newcommand{\KEffThreeD}{\ensuremath{3}}
+\newcommand{\StressThreeDKTwo}{\ensuremath{0.0966937}}
+
+\newcommand{\RhoTwoD}{\ensuremath{0.00314854}}
+\newcommand{\EtaTwoD}{\ensuremath{0.00114077}}
+\newcommand{\KEffTwoD}{\ensuremath{2}}
+\newcommand{\StressTwoDKTwo}{\ensuremath{0.00235905}}
+
+\newcommand{\RhoTwoDProj}{\ensuremath{5.45439\times 10^{-15}}}
+\newcommand{\EtaTwoDProj}{\ensuremath{1.97848\times 10^{-15}}}
+\newcommand{\StressTwoDProjKTwo}{\ensuremath{6.03971\times 10^{-15}}}
+
+% ============================================================
+% Title
+% ============================================================
+\title{\vspace{-1.2em}
+{\Huge \OCTAResearch}\\[-0.2em]
+{\large \color{octaGray}Technical Note}\\[0.8em]
+{\LARGE \textbf{Shadow Math / Calculus}}\\[-0.1em]
+{\large \color{octaGray}Projection--Lift Geometry and Audit-Grade Dimension Certificates}\\[0.2em]
+{\small \color{octaGray}\Tagline}
+}
+\author{\OCTAResearch}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\textbf{Purpose.} ``Shadow Math'' is a projection-first formalism: observed lower-dimensional shadows constrain (and sometimes uniquely determine)
+higher-dimensional structure through lifts and consistency. We present three core theorems:
+
+\begin{enumerate}[label=(\Alph*)]
+\item \textbf{Single-view non-injectivity:} a single 2D projection does not uniquely determine 3D.
+\item \textbf{Multi-view lift:} with two calibrated non-degenerate views and correct correspondences, a 3D point is uniquely recovered by triangulation.
+\item \textbf{Dimension certificate:} from pairwise distances, the Gram (double-centered) matrix eigenstructure certifies the minimal Euclidean embedding dimension.
+\end{enumerate}
+
+\textbf{Empirical evidence.} We embed \OCTA\ Proof Lab v1.3 (JSON) and summarize its audit-grade certificate:
+a 3D world is non-planar while a 2D-in-3D control is planar under noise, using eigen-ratios, out-of-plane energy, and MDS stress.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+% ============================================================
+\section{Shadow Math: Core Definitions}
+% ============================================================
+
+\begin{definition}[Shadow map]
+Let $X$ be a latent space (e.g., $\mathbb{R}^D$, a manifold, or a metric space) and $Y$ an observation space.
+A \emph{shadow map} is a function $\pi:X\to Y$ that is typically surjective and not injective.
+\end{definition}
+
+\begin{definition}[Fiber / ambiguity set]
+For $y\in Y$, the \emph{fiber} is $\pi^{-1}(y)=\{x\in X:\pi(x)=y\}$.
+When $\pi$ is not injective, fibers contain multiple points: reconstruction from a single shadow is ill-posed without extra constraints.
+\end{definition}
+
+\begin{definition}[Lift]
+A \emph{lift} is a (possibly partial) right-inverse $\ell:Y\to X$ such that $\pi(\ell(y))=y$ whenever defined.
+In practice, lifts are induced by multi-shadow consistency, rigidity constraints, priors, or optimization.
+\end{definition}
+
+\begin{definition}[Multi-shadow system]
+A multi-shadow observation consists of maps $\pi_i:X\to Y_i$ for $i=1,\dots,m$.
+A latent point $x\in X$ is observed as $(y_1,\dots,y_m)$ with $y_i=\pi_i(x)$.
+A \emph{consistent lift} is an $x$ such that $x\in\bigcap_{i=1}^m \pi_i^{-1}(y_i)$.
+\end{definition}
+
+\begin{remark}[What ``higher dimension'' means here]
+Throughout, ``higher dimension'' is \emph{mathematical}: the minimal Euclidean dimension needed to realize the constraints.
+No physical claim is made about spacetime; we prove statements about geometric consistency and embedding dimension.
+\end{remark}
+
+% ============================================================
+\section{Theorem A: Single-View Non-Injectivity}
+% ============================================================
+
+\subsection{Pinhole projection model}
+Let $\pi_f:\mathbb{R}^3_{z>0}\to\mathbb{R}^2$ be calibrated pinhole projection with focal length $f>0$:
+\[
+  \pi_f(X,Y,Z) = \left(\frac{fX}{Z},\, \frac{fY}{Z}\right).
+\]
+
+\begin{theorem}[Ray fiber; no unique single-view lift]\label{thm:A}
+For any $(u,v)\in\mathbb{R}^2$, the fiber $\pi_f^{-1}(u,v)$ contains infinitely many points (a 1D ray). Hence $\pi_f$ is not injective.
+\end{theorem}
+
+\begin{proof}
+Fix $(u,v)$. The constraints $u=fX/Z$ and $v=fY/Z$ imply $X=(u/f)Z$ and $Y=(v/f)Z$ for any $Z>0$.
+Therefore the entire ray $\{((u/f)Z,(v/f)Z,Z):Z>0\}$ maps to $(u,v)$, so the fiber is infinite and $\pi_f$ is not injective.
+\end{proof}
+
+\begin{corollary}[Non-uniqueness of reconstruction from one image]
+Any algorithm that reconstructs 3D from a single 2D image must inject extra assumptions (priors, learned models, symmetry, rigidity, known scale, etc.).
+\end{corollary}
+
+% ============================================================
+\section{Theorem B: Multi-View Lift via Triangulation}
+% ============================================================
+
+\subsection{Back-projected rays}
+A calibrated camera defines $\pi_i:\mathbb{R}^3\to\mathbb{R}^2$ with optical center $C_i$.
+For an observation $x_i\in\mathbb{R}^2$, the set of 3D points that project to $x_i$ is a ray (or line) in 3D:
+\[
+  L_i(x_i) = \{C_i + t\,d_i(x_i): t>0\},
+\]
+where $d_i(x_i)$ is the unit direction associated with pixel $x_i$.
+
+\begin{lemma}[Two distinct lines intersect in at most one point]\label{lem:lines}
+If $L_1$ and $L_2$ are distinct lines in $\mathbb{R}^3$, then $|L_1\cap L_2|\le 1$.
+\end{lemma}
+
+\begin{proof}
+If two distinct lines intersect at two points, they must coincide (a line is determined by two points), contradiction.
+\end{proof}
+
+\begin{theorem}[Two-view triangulation (noise-free, correct correspondence)]\label{thm:B}
+Let cameras $1$ and $2$ be calibrated with distinct optical centers $C_1\neq C_2$.
+Let $(x_1,x_2)$ be a correspondence generated by a single finite 3D point $X$.
+Then $X$ is uniquely determined and equals the unique intersection:
+\[
+  X = L_1(x_1)\cap L_2(x_2).
+\]
+\end{theorem}
+
+\begin{proof}
+Since $(x_1,x_2)$ comes from $X$, we have $X\in L_1(x_1)$ and $X\in L_2(x_2)$ so the intersection is nonempty.
+Because $C_1\neq C_2$, the rays are distinct lines. By Lemma~\ref{lem:lines}, their intersection contains at most one point.
+Therefore the intersection is exactly $\{X\}$.
+\end{proof}
+
+\begin{remark}[Noise and practical triangulation]
+With noise, rays do not intersect exactly; one solves a least-squares approximation (e.g., DLT / SVD).
+Three or more views improve stability by over-determining the system.
+\end{remark}
+
+% ============================================================
+\section{Shadow Calculus: Fiber Dimension from Jacobian Rank}
+% ============================================================
+
+\begin{theorem}[Constant Rank Theorem (informal statement)]\label{thm:rank}
+Let $\pi:\mathbb{R}^D\to\mathbb{R}^d$ be $C^1$ and suppose $\mathrm{rank}\,D\pi(x)=r$ is constant in a neighborhood of $x$.
+Then near $x$, the fiber $\pi^{-1}(\pi(x))$ is a $(D-r)$-dimensional submanifold.
+\end{theorem}
+
+\begin{remark}
+For a generic smooth projection from $D$ to $d$ with full rank $r=d$, the fiber is locally $(D-d)$-dimensional.
+For pinhole projection $\mathbb{R}^3\to\mathbb{R}^2$, this predicts a 1D ambiguity set (the ray), matching Theorem~\ref{thm:A}.
+\end{remark}
+
+% ============================================================
+\section{Theorem C: Gram Eigenstructure Certifies Dimension}
+% ============================================================
+
+\subsection{Distances, centering, and Gram}
+Given points $p_1,\dots,p_n\in\mathbb{R}^k$, define squared distances $D^{(2)}_{ij}=\|p_i-p_j\|_2^2$ and the centering matrix $J=I-\frac{1}{n}\mathbf{1}\mathbf{1}^\top$.
+Define the double-centered Gram candidate
+\[
+  B = -\frac{1}{2} J D^{(2)} J.
+\]
+
+\begin{theorem}[Euclidean distance matrix equivalence]\label{thm:C}
+If $D^{(2)}$ is generated by some points in $\mathbb{R}^k$, then $B\succeq 0$ and $\mathrm{rank}(B)\le k$.
+Conversely, if $B\succeq 0$ and $\mathrm{rank}(B)=r$, then there exist points in $\mathbb{R}^r$ whose squared distances equal $D^{(2)}$.
+\end{theorem}
+
+\begin{proof}
+(\emph{Forward.}) Let $P$ be the centered coordinate matrix (rows $p_i$ with mean zero). Then $G=PP^\top$ is positive semidefinite and $\mathrm{rank}(G)\le k$.
+Classical MDS shows $G=-\frac12 JD^{(2)}J=B$.
+
+(\emph{Reverse.}) If $B=U\Lambda U^\top$ with $\Lambda\succeq 0$, define $X=U_r\Lambda_r^{1/2}$ using the positive eigenpairs.
+Then $XX^\top=B$ is a Gram matrix in $\mathbb{R}^r$ and reproduces $D^{(2)}$.
+\end{proof}
+
+\begin{corollary}[Certified lower bound on embedding dimension]\label{cor:C}
+If $B$ has at least $k+1$ strictly positive eigenvalues, then the distances cannot embed isometrically in $\mathbb{R}^k$.
+Thus the intrinsic Euclidean dimension is at least $k+1$.
+\end{corollary}
+
+\subsection{Noise-robust planarity certificate}
+Let eigenvalues be $\lambda_1\ge\lambda_2\ge\lambda_3\ge\cdots$ and define $\lambda_i^+=\max(\lambda_i,0)$.
+
+\begin{definition}[Out-of-plane ratios]
+\[
+  \rho \coloneqq \frac{\lambda_3^+}{\lambda_2^+}\ \ (\lambda_2^+>0),\qquad
+  \eta \coloneqq \frac{\lambda_3^+}{\sum_i \lambda_i^+}.
+\]
+\end{definition}
+
+\begin{definition}[Energy effective dimension]
+Given $\varepsilon\in(0,1)$,
+\[
+  k_{\mathrm{eff}}(\varepsilon)=\min\left\{k:\frac{\sum_{i>k}\lambda_i^+}{\sum_i \lambda_i^+}\le\varepsilon\right\}.
+\]
+\end{definition}
+
+\begin{definition}[MDS stress (squared)]
+Let $\hat X^{(k)}$ be the classical MDS embedding using the top $k$ eigenpairs of $B$.
+Let $D$ be original distances and $\hat D^{(k)}$ be distances in $\hat X^{(k)}$.
+Define
+\[
+  \mathrm{stress}(k)=\left(\frac{\|D-\hat D^{(k)}\|_F}{\|D\|_F}\right)^2.
+\]
+\end{definition}
+
+\begin{proposition}[Planar data implies $\lambda_3=0$ (noise-free)]\label{prop:planar}
+If points lie in an affine 2D subspace, then $\mathrm{rank}(B)\le 2$ and $\lambda_3=0$, so $\rho=\eta=0$, $k_{\mathrm{eff}}=2$, and $\mathrm{stress}(2)=0$.
+\end{proposition}
+
+\begin{proof}
+After centering, points lie in a 2D linear subspace, so the centered coordinate matrix has rank at most 2.
+Thus $B=PP^\top$ has rank at most 2 and $\lambda_3=0$. Exact MDS in $k=2$ reproduces all distances so stress is 0.
+\end{proof}
+
+\begin{definition}[Audit-grade planarity rule]
+Fix thresholds $(\rho_\tau,\eta_\tau)$ and declare \emph{planar} iff $\rho\le \rho_\tau$ and $\eta\le \eta_\tau$.
+In Proof Lab v1.3 we use $(\rho_\tau,\eta_\tau)=(\RhoTau,\EtaTau)$.
+\end{definition}
+
+% ============================================================
+\section{Empirical Evidence: Proof Lab v1.3 (Audit Embed)}
+% ============================================================
+
+\subsection{Experiment summary}
+The simulation uses: seed $\Seed$, $n=\NPoints$, noise $\sigma=\NoiseSigmaPx$ px, $\Views$ views, focal $f=\FocalPx$ px, baseline $\Baseline$,
+and certificate settings energy\_eps $=\EnergyEps$, thresholds $(\rho_\tau,\eta_\tau)=(\RhoTau,\EtaTau)$.
+
+\subsection{Key outcomes (v1.3)}
+\begin{itemize}
+\item \textbf{(A) Single-view non-injectivity witnessed:} pixel distance between two distinct 3D points sharing the same 2D projection is $\SameShadowPixelDist$.
+\item \textbf{Reprojection sanity:} 3D reconstructed mean/median/max reprojection is $\ReprojThreeDMean/\ReprojThreeDMedian/\ReprojThreeDMax$ px;
+2D control reconstructed is $\ReprojTwoDMean/\ReprojTwoDMedian/\ReprojTwoDMax$ px.
+\item \textbf{Dimension certificate:} 3D reconstructed is non-planar with $\rho=\RhoThreeD$ and $\eta=\EtaThreeD$; $k_{\mathrm{eff}}=\KEffThreeD$.
+2D control reconstructed is planar with $\rho=\RhoTwoD$ and $\eta=\EtaTwoD$; $k_{\mathrm{eff}}=\KEffTwoD$.
+\item \textbf{Ablation validation:} projecting the reconstructed 2D control to its best-fit plane collapses out-of-plane statistics:
+$\rho\approx \RhoTwoDProj$, $\eta\approx \EtaTwoDProj$, and $\mathrm{stress}(2)\approx \StressTwoDProjKTwo$.
+\end{itemize}
+
+\subsection{Audit table}
+\begin{table}[h]
+\centering
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+Dataset & $\rho=\lambda_3/\lambda_2$ & $\eta=\lambda_3/\sum\lambda_i$ & $k_{\mathrm{eff}}$ & $\mathrm{stress}(2)$ \\
+\midrule
+3D reconstructed & $\RhoThreeD$ & $\EtaThreeD$ & $\KEffThreeD$ & $\StressThreeDKTwo$ \\
+2D reconstructed & $\RhoTwoD$ & $\EtaTwoD$ & $\KEffTwoD$ & $\StressTwoDKTwo$ \\
+2D recon $\to$ plane & $\RhoTwoDProj$ & $\EtaTwoDProj$ & $2$ & $\StressTwoDProjKTwo$ \\
+\bottomrule
+\end{tabular}
+\caption{Noise-robust certificate statistics reported by Proof Lab v1.3.}
+\end{table}
+
+% ============================================================
+\section{Interpretation: What is Proven and What is Not}
+% ============================================================
+
+\subsection{What is proven (mathematically)}
+\begin{itemize}
+\item A single calibrated 2D pinhole projection is not injective; its fiber is a ray (Theorem~\ref{thm:A}).
+\item Two calibrated views with non-zero baseline uniquely recover a 3D point in the noise-free consistent case (Theorem~\ref{thm:B}).
+\item The Gram eigenstructure of distances certifies intrinsic Euclidean embedding dimension (Theorem~\ref{thm:C} and Corollary~\ref{cor:C}).
+\item In noisy data, eigen-ratios ($\rho$), out-of-plane energy ($\eta$), and stress provide an audit-grade planarity classifier, validated by ablation (Proof Lab v1.3).
+\end{itemize}
+
+\subsection{What is not proven (physics)}
+This document does not prove physical extra spacetime dimensions. It proves a rigorous statement of \emph{dimensional necessity for constraints}:
+if a set of constraints (e.g., distances) is incompatible with any embedding in $\mathbb{R}^d$, then a higher-dimensional mathematical model is required.
+
+% ============================================================
+\appendix
+\section{Appendix A: Embedded Audit Artifact (Proof Lab v1.3 JSON)}
+The full Proof Lab v1.3 report is embedded verbatim below (so the PDF is self-contained and auditable).
+
+\begin{JSON}
+{
+  "shadow_math_proof_lab": "v1.3",
+  "settings": {
+    "seed": 7,
+    "N_points": 120,
+    "noise_sigma_px": 0.7,
+    "views": 3,
+    "focal_px": 800.0,
+    "baseline": 0.7,
+    "rank_rel": 0.0001,
+    "rank_abs": 1e-08,
+    "energy_eps": 0.002,
+    "rho_tau": 0.01,
+    "eta_tau": 0.005,
+    "stress2_tau": null,
+    "bootstrap": false,
+    "boot_iters": 200
+  },
+  "partA_single_view_noninjective": {
+    "X_example": [
+      0.2,
+      -0.1,
+      3.0
+    ],
+    "X_alt_same_shadow": [
+      0.5333333333333333,
+      -0.26666666666666666,
+      8.0
+    ],
+    "x2d": [
+      53.333333333333336,
+      -26.666666666666668
+    ],
+    "x2d_alt": [
+      53.333333333333336,
+      -26.666666666666668
+    ],
+    "pixel_distance_between_same_shadow": 0.0
+  },
+  "reprojection": {
+    "3d_reproj_mean_median_max_px": [
+      0.6334632423709153,
+      0.5946023545206207,
+      1.7460176603321707
+    ],
+    "2d_reproj_mean_median_max_px": [
+      0.6244278835878393,
+      0.5715316109421957,
+      1.7592979501360109
+    ]
+  },
+  "ablations": {
+    "3d_true": {
+      "top_eigs": [
+        85.26143261955589,
+        21.77630812591919,
+        9.989292558461699,
+        5.909409361627102e-14,
+        4.211831153488658e-14,
+        3.001406299335519e-14,
+        2.2459136607094028e-14,
+        2.184523944602358e-14,
+        2.0544122036031556e-14,
+        2.0022018895305128e-14
+      ],
+      "raw_rank": 3,
+      "raw_rank_thr": 0.008526143261955589,
+      "rho_lambda3_over_lambda2": 0.4587229617022167,
+      "eta_out_of_plane_energy": 0.08535884638310838,
+      "k_eff_energy": 3,
+      "energy_eps": 0.002,
+      "psd_diagnostics": {
+        "min_eig": -6.786634766686281e-14,
+        "neg_mass": 5.992336195507268e-13,
+        "neg_count": 59
+      },
+      "stress_k2": 0.0963538298571956,
+      "stress_k3": 1.355989678826925e-15,
+      "stress_gain_2_to_3": 0.09635382985719423,
+      "plane_thickness": {
+        "rms_dist": 0.2885205445957835,
+        "mean_abs_dist": 0.2478182813831521,
+        "max_abs_dist": 0.5088953170717332,
+        "singular_values": [
+          9.233711746613922,
+          4.666509201310889,
+          3.1605842115757192
+        ]
+      }
+    },
+    "3d_reconstructed": {
+      "top_eigs": [
+        84.48208473128314,
+        21.73534039022261,
+        9.967145479521923,
+        6.32629579286111e-14,
+        4.433249726870207e-14,
+        3.0139003582359916e-14,
+        2.2150470320118758e-14,
+        2.151963122245072e-14,
+        2.029468624811507e-14,
+        1.872694958272285e-14
+      ],
+      "raw_rank": 3,
+      "raw_rank_thr": 0.008448208473128315,
+      "rho_lambda3_over_lambda2": 0.4585686398546363,
+      "eta_out_of_plane_energy": 0.08578716974174289,
+      "k_eff_energy": 3,
+      "energy_eps": 0.002,
+      "psd_diagnostics": {
+        "min_eig": -6.202977475060884e-14,
+        "neg_mass": 5.894550817210068e-13,
+        "neg_count": 58
+      },
+      "stress_k2": 0.09669367719717466,
+      "stress_k3": 1.4103463570765574e-15,
+      "stress_gain_2_to_3": 0.09669367719717324,
+      "plane_thickness": {
+        "rms_dist": 0.28820053029563064,
+        "mean_abs_dist": 0.24755234264302867,
+        "max_abs_dist": 0.5129057965639194,
+        "singular_values": [
+          9.191413641615911,
+          4.66211758648606,
+          3.157078630557357
+        ]
+      }
+    },
+    "2d_true_in_3d": {
+      "top_eigs": [
+        16.367099725226314,
+        9.321667421063664,
+        5.3990363461657744e-14,
+        1.1528420336633425e-14,
+        1.027802360097614e-14,
+        1.0073703437333395e-14,
+        9.899620522551875e-15,
+        9.193655620307785e-15,
+        8.922079901615727e-15,
+        8.876535590366628e-15
+      ],
+      "raw_rank": 2,
+      "raw_rank_thr": 0.0016367099725226315,
+      "rho_lambda3_over_lambda2": 5.791921232853541e-15,
+      "eta_out_of_plane_energy": 2.101710960054945e-15,
+      "k_eff_energy": 2,
+      "energy_eps": 0.002,
+      "psd_diagnostics": {
+        "min_eig": -5.3056870642191965e-14,
+        "neg_mass": 3.239207344058506e-13,
+        "neg_count": 59
+      },
+      "stress_k2": 5.6998804730064765e-15,
+      "stress_k3": 5.369352212020163e-15,
+      "stress_gain_2_to_3": 3.3052826098631337e-16,
+      "plane_thickness": {
+        "rms_dist": 0.0,
+        "mean_abs_dist": 0.0,
+        "max_abs_dist": 0.0,
+        "singular_values": [
+          4.04562723508065,
+          3.0531405832459906,
+          0.0
+        ]
+      }
+    },
+    "2d_reconstructed": {
+      "top_eigs": [
+        16.36139536525108,
+        9.312880409591413,
+        0.029321934363254618,
+        5.260820233306346e-14,
+        1.1170130093952081e-14,
+        1.0615062308793922e-14,
+        1.0064443983044957e-14,
+        9.510728928776737e-15,
+        9.402359556406956e-15,
+        9.052935219975948e-15
+      ],
+      "raw_rank": 3,
+      "raw_rank_thr": 0.0016361395365251082,
+      "rho_lambda3_over_lambda2": 0.003148535477064187,
+      "eta_out_of_plane_energy": 0.0011407716030644452,
+      "k_eff_energy": 2,
+      "energy_eps": 0.002,
+      "psd_diagnostics": {
+        "min_eig": -5.35875911351897e-14,
+        "neg_mass": 3.33705553241299e-13,
+        "neg_count": 59
+      },
+      "stress_k2": 0.0023590535996461906,
+      "stress_k3": 5.245193899796297e-15,
+      "stress_gain_2_to_3": 0.0023590535996409452,
+      "plane_thickness": {
+        "rms_dist": 0.01563168106849415,
+        "mean_abs_dist": 0.012761830963920633,
+        "max_abs_dist": 0.04072377428557891,
+        "singular_values": [
+          4.044922170481291,
+          3.0517012320329484,
+          0.17123648665881408
+        ]
+      }
+    },
+    "2d_reconstructed_projected_to_plane": {
+      "top_eigs": [
+        16.361395365251077,
+        9.312880409591411,
+        5.0796064087230356e-14,
+        1.0974549398958973e-14,
+        1.0788191388442234e-14,
+        1.0373061509645461e-14,
+        9.768093047589907e-15,
+        9.509371066446822e-15,
+        9.267021196555118e-15,
+        9.055204390856922e-15
+      ],
+      "raw_rank": 2,
+      "raw_rank_thr": 0.0016361395365251078,
+      "rho_lambda3_over_lambda2": 5.454388100475882e-15,
+      "eta_out_of_plane_energy": 1.9784808939772844e-15,
+      "k_eff_energy": 2,
+      "energy_eps": 0.002,
+      "psd_diagnostics": {
+        "min_eig": -5.1927357117177994e-14,
+        "neg_mass": 3.3166733956142463e-13,
+        "neg_count": 60
+      },
+      "stress_k2": 6.039714908935871e-15,
+      "stress_k3": 6.7454293747658966e-15,
+      "stress_gain_2_to_3": -7.057144658300254e-16,
+      "plane_thickness": {
+        "rms_dist": 1.3423425163543797e-15,
+        "mean_abs_dist": 1.3359789490237159e-15,
+        "max_abs_dist": 1.555195670753383e-15,
+        "singular_values": [
+          4.04492217048129,
+          3.0517012320329484,
+          1.4704541971460186e-14
+        ]
+      }
+    },
+    "2d_reconstructed_plane_fit": {
+      "centroid": [
+        -0.046275325034957286,
+        -0.007132067002036587,
+        3.498599635989761
+      ],
+      "normal": [
+        -0.0006783365196464439,
+        0.0019561901709923765,
+        -0.9999978565874935
+      ],
+      "singular_values": [
+        4.044922170481291,
+        3.0517012320329484,
+        0.17123648665881408
+      ],
+      "rms_dist": 0.01563168106849415,
+      "max_abs_dist": 0.04072377428557891
+    }
+  },
+  "certificates": {
+    "3d_reconstructed_planarity": {
+      "rho_tau": 0.01,
+      "eta_tau": 0.005,
+      "stress2_tau": null,
+      "rho_ok": false,
+      "eta_ok": false,
+      "stress_ok": true,
+      "planar": false
+    },
+    "2d_reconstructed_planarity": {
+      "rho_tau": 0.01,
+      "eta_tau": 0.005,
+      "stress2_tau": null,
+      "rho_ok": true,
+      "eta_ok": true,
+      "stress_ok": true,
+      "planar": true
+    },
+    "expectations": {
+      "3d_should_be_nonplanar": true,
+      "2d_should_be_near_planar": true
+    }
+  },
+  "bootstrap": {
+    "3d_reconstructed": null,
+    "2d_reconstructed": null
+  }
+}
+\end{JSON}
+
+\end{document}
