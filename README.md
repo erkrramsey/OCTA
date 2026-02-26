@@ -1,2 +1,0 @@
-# OCTA
-OCTA AGI Labs
